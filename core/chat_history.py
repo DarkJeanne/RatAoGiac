@@ -73,7 +73,7 @@ def list_chat_sessions():
     if not os.path.exists(CHAT_HISTORIES_DIR):
         os.makedirs(CHAT_HISTORIES_DIR)
         return []
-        
+
     for fname in os.listdir(CHAT_HISTORIES_DIR):
         if fname.endswith(".json"):
             session_id = fname[:-5] # Bỏ .json

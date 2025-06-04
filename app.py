@@ -50,8 +50,7 @@ default_states = {
     "messages": [],
     "bot_answering": False,
     "current_session_display_name": None,
-    "message_placeholder": None, # Thêm từ lần trước
-    "stop_action_requested": False # Cờ cho hành động dừng
+    "stop_action_requested": False
 }
 for key, value in default_states.items():
     if key not in st.session_state:
@@ -84,7 +83,7 @@ if selected_session_id:
         else:
             st.error("Lỗi nghiêm trọng: Không thể khởi tạo embedding model khi tải session.")
             reset_to_upload()
-        st.rerun()
+    st.rerun()
 
 # --- Giao diện chính ---
 if st.session_state.state == "upload":
@@ -245,21 +244,12 @@ elif st.session_state.state == "chatting":
                         content_preview = source.get('content', '')[:300] + "..." if source.get('content') else "N/A"
                         st.markdown(content_preview)
 
-    # Logic cho placeholder "Bot đang suy nghĩ..." được đưa lên trước chat_screen
-    if 'message_placeholder' not in st.session_state:
-        st.session_state.message_placeholder = None
-
+    # Simplified: Display "Bot đang suy nghĩ..." directly if bot is answering
     if st.session_state.bot_answering:
-        if not st.session_state.message_placeholder:
-            with st.chat_message("assistant"): # Rendered within chat-history-area
-                 st.session_state.message_placeholder = st.empty()
-        if st.session_state.message_placeholder: # Check if it was successfully created
-            st.session_state.message_placeholder.markdown("▌ Bot đang suy nghĩ...")
-    elif st.session_state.message_placeholder: # If bot is not answering but placeholder exists, clear it
-        st.session_state.message_placeholder.empty()
-        st.session_state.message_placeholder = None
+        with st.chat_message("assistant"):
+            st.markdown("▌ Bot đang suy nghĩ...")
         
-    st.markdown("</div>", unsafe_allow_html=True) # Đóng div chat-history-area SAU KHI xử lý placeholder
+    st.markdown("</div>", unsafe_allow_html=True) # Đóng div chat-history-area
 
     # Gọi chat_screen để lấy input và các nút điều khiển
     prompt, send_triggered, stop_button_clicked_in_ui = chat_screen(
@@ -330,11 +320,11 @@ elif st.session_state.state == "chatting":
                         break
                 
                 if not last_user_msg_content:
-                     st.warning("Không tìm thấy câu hỏi từ người dùng để xử lý.")
-                     st.session_state.bot_answering = False
-                     st.session_state.stop_action_requested = False 
-                     # Placeholder sẽ tự động xóa ở rerun tiếp theo
-                     st.rerun()
+                    st.warning("Không tìm thấy câu hỏi từ người dùng để xử lý.")
+                    st.session_state.bot_answering = False
+                    st.session_state.stop_action_requested = False 
+                    # Placeholder sẽ tự động xóa ở rerun tiếp theo
+                    st.rerun()
                 else:
                     response = qa_chain.invoke({"query": last_user_msg_content})
                     response_content = response.get("result", "Xin lỗi, tôi không tìm thấy câu trả lời.")
@@ -350,9 +340,10 @@ elif st.session_state.state == "chatting":
             
             # Tin nhắn "Bot đang suy nghĩ..." đã được hiển thị.
             # Giờ xóa nó đi TRƯỚC KHI thêm câu trả lời thật.
-            if st.session_state.message_placeholder:
-                st.session_state.message_placeholder.empty()
-                st.session_state.message_placeholder = None 
+            # This is no longer needed as the placeholder is not explicitly managed with st.empty()
+            # if st.session_state.message_placeholder:
+            #     st.session_state.message_placeholder.empty()
+            #     st.session_state.message_placeholder = None 
             
             st.session_state.messages.append({"role": "assistant", "content": response_content, "sources": sources_list})
             save_chat_history(st.session_state.session_id, st.session_state.messages, st.session_state.current_session_display_name)
