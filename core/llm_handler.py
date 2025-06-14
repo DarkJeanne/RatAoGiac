@@ -4,9 +4,8 @@ from langchain.prompts import PromptTemplate
 from langchain_cohere import CohereRerank
 from langchain.retrievers import ContextualCompressionRetriever
 import streamlit as st
-from config import ollama_model_name, COHERE_API_KEY
+from config import ollama_model_name, COHERE_API_KEY, cohere_reranking_model_name, device
 
-# Cache để không phải load lại LLM mỗi lần
 @st.cache_resource(show_spinner="Đang khởi tạo mô hình AI...")
 def get_llm_instance():
     """Khởi tạo LLM instance."""
@@ -15,14 +14,13 @@ def get_llm_instance():
         return ChatOllama(
             model=ollama_model_name,
             temperature=0.2,
-            device="cpu"
+            device=device
         )
     except Exception as e:
         print(f"[llm_handler] Lỗi khi khởi tạo LLM: {e}")
         st.error(f"Lỗi khi khởi tạo LLM: {e}")
         return None
 
-# Cache để không phải load lại Cohere Reranker mỗi lần
 @st.cache_resource(show_spinner="Đang khởi tạo mô hình Reranker...")
 def get_reranker():
     """Khởi tạo Cohere Reranker."""
@@ -33,15 +31,14 @@ def get_reranker():
         print("[llm_handler] Bắt đầu khởi tạo CohereRerank...")
         return CohereRerank(
             cohere_api_key=COHERE_API_KEY,
-            model="rerank-multilingual-v3.0",
-            top_n=3  # Chỉ giữ 3 kết quả tốt nhất
+            model=cohere_reranking_model_name,
+            top_n=5
         )
     except Exception as e:
         print(f"[llm_handler] Lỗi khi khởi tạo Cohere Reranker: {e}")
         st.error(f"Lỗi khi khởi tạo Cohere Reranker: {e}")
         return None
 
-# Hàm sắp xếp lại tài liệu để tối ưu thứ tự nhập vào LLM
 def reorder_documents(docs):
     """
     Sắp xếp lại tài liệu để tăng hiệu quả của LLM bằng cách đặt một số tài liệu ưu tiên lên đầu.
@@ -53,20 +50,16 @@ def reorder_documents(docs):
     
     reordered_docs = []
     if len(docs) > 1:
-        # Giữ tài liệu có điểm cao nhất đầu tiên
         reordered_docs.append(docs[0])
         
-        # Thêm các tài liệu ở giữa
         if len(docs) > 2:
             reordered_docs.extend(docs[2:])
         
-        # Kết thúc với tài liệu có điểm thứ hai - vị trí dễ nhớ
         if len(docs) > 1:
             reordered_docs.append(docs[1]) 
     else:
         reordered_docs = docs
     
-    # Nối các tài liệu với nhau
     context_text = "\n\n---\n\n".join([doc.page_content for doc in reordered_docs])
     return context_text
 
@@ -79,17 +72,23 @@ def get_qa_retrieval_chain(llm_instance, retriever):
     
     print("[llm_handler] Bắt đầu khởi tạo RetrievalQA chain...")
     
-    # Nâng cấp prompt template để cải thiện chất lượng câu trả lời
     prompt_template_str = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-Bạn là một trợ lý AI chuyên nghiệp và thông thái. Vai trò của bạn là trả lời câu hỏi của người dùng một cách chính xác và súc tích, chỉ dựa vào nội dung trong "Thông tin tham khảo" được cung cấp.
+Bạn là một trợ lý AI chuyên nghiệp, chỉ được phép trả lời dựa trên "Thông tin tham khảo" bên dưới. Nếu không tìm thấy thông tin, hãy trả lời đúng là "Thông tin này không có trong tài liệu được cung cấp.".
 
-**Quy trình làm việc của bạn như sau:**
-1.  **Suy nghĩ nội bộ (không hiển thị phần này):** Đọc kỹ câu hỏi và toàn bộ "Thông tin tham khảo". Trong đầu, hãy xác định và gạch chân những câu, những dữ kiện từ tài liệu có liên quan trực tiếp đến câu hỏi.
-2.  **Tổng hợp và trả lời (chỉ hiển thị phần này):** Dựa trên những thông tin liên quan đã xác định ở bước 1, hãy soạn một câu trả lời hoàn chỉnh, mạch lạc và tự nhiên cho người dùng.
-    - Đi thẳng vào vấn đề, không dùng các cụm từ mở đầu như "Dựa trên tài liệu..." hay "Theo thông tin được cung cấp...".
-    - Trình bày câu trả lời như một chuyên gia đang giải thích vấn đề.
-    - Nếu không tìm thấy thông tin liên quan trong tài liệu, chỉ cần trả lời rằng: "Thông tin này không có trong tài liệu được cung cấp."
-    - Luôn trả lời bằng tiếng Việt.
+**Quy trình làm việc:**
+1. Đọc kỹ câu hỏi và toàn bộ "Thông tin tham khảo" được cung cấp.
+2. Tìm kiếm, xác định và trích xuất các đoạn, câu, dữ kiện hoặc ý liên quan trực tiếp đến câu hỏi trong tài liệu.
+3. Đối chiếu, tổng hợp, phân tích các thông tin liên quan này để tạo thành một câu trả lời ngắn gọn, rõ ràng, đúng trọng tâm, có thể so sánh hoặc làm rõ nếu cần thiết.
+4. Nếu có nhiều nguồn hoặc ý trong tài liệu, hãy tổng hợp, so sánh, hoặc làm rõ các điểm khác biệt hoặc bổ sung lẫn nhau.
+5. Nếu không có thông tin phù hợp và không thể đưa ra câu trả lời, trả lời đúng: "Thông tin này không có trong tài liệu được cung cấp." (không thêm thắt gì khác).
+6. Luôn luôn trả lời bằng Tiếng Việt.
+7. Cố gắng đưa ra câu trả lời liên quan mặc dù có thể không đầy đủ.
+
+**Yêu cầu nghiêm ngặt:**
+- Chỉ sử dụng thông tin có trong "Thông tin tham khảo".
+- Không được bịa, không được tự chế, không được tự tạo ví dụ, không được tự đưa ra nhận định ngoài tài liệu, không nói lan man.
+- Không được nói lại yêu cầu, không được nói lại câu hỏi, không được nói lại nội dung tài liệu.
+- Trả lời ngắn gọn, đúng trọng tâm, không giải thích lan man, không thêm thắt.
 
 Thông tin tham khảo:
 {context}<|eot_id|><|start_header_id|>user<|end_header_id|>
@@ -97,12 +96,10 @@ Câu hỏi: {question}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 Câu trả lời hữu ích:"""
 
     try:
-        # Khởi tạo prompt
         PROMPT = PromptTemplate(
             template=prompt_template_str, input_variables=["context", "question"]
         )
         
-        # Thêm reranking nếu COHERE_API_KEY được cung cấp
         reranker = get_reranker()
         if reranker:
             print("[llm_handler] Sử dụng Cohere Reranker để cải thiện kết quả...")
@@ -114,9 +111,7 @@ Câu trả lời hữu ích:"""
                 retriever = compression_retriever
             except Exception as e:
                 print(f"[llm_handler] Lỗi khi khởi tạo contextual compression: {e}")
-                # Giữ nguyên retriever nếu lỗi
         
-        # Khởi tạo chain tiêu chuẩn
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm_instance,
             chain_type="stuff", 
@@ -131,5 +126,3 @@ Câu trả lời hữu ích:"""
         print(f"[llm_handler] Lỗi khi tạo QA chain: {e}")
         st.error(f"Lỗi khi tạo QA chain: {e}")
         return None
-
-# (Code for get_qa_chain will go here) 

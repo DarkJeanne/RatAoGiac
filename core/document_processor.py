@@ -16,6 +16,18 @@ def process_uploaded_files(uploaded_files):
     print("[document_processor] Bắt đầu xử lý và chia chunk parent/child...")
     if not isinstance(uploaded_files, list):
         uploaded_files = [uploaded_files]
+        print(f"[document_processor] Đã chuyển uploaded_files thành list, số lượng: 1")
+    else:
+        print(f"[document_processor] Số lượng file được tải lên: {len(uploaded_files)}")
+
+    for i, uploaded_file in enumerate(uploaded_files):
+        if uploaded_file is None:
+            print(f"[document_processor] Warning: File #{i} là None")
+        else:
+            try:
+                print(f"[document_processor] File #{i}: {uploaded_file.name}, size: {uploaded_file.size} bytes")
+            except Exception as e:
+                print(f"[document_processor] Error khi truy cập thông tin file #{i}: {e}")
 
     raw_docs_with_source = []
     for uploaded_file in uploaded_files:
@@ -52,9 +64,7 @@ def process_uploaded_files(uploaded_files):
     if not raw_docs_with_source:
         print("[document_processor] Không có văn bản nào được trích xuất.")
         return None, None
-        
-    # --- LOGIC CỦA PARENT DOCUMENT ---
-    # 1. Chia thành các parent chunks
+    
     parent_splitter = RecursiveCharacterTextSplitter(
         chunk_size=PARENT_CHUNK_SIZE, 
         chunk_overlap=PARENT_CHUNK_OVERLAP
@@ -62,13 +72,11 @@ def process_uploaded_files(uploaded_files):
     parent_chunks = parent_splitter.split_documents(raw_docs_with_source)
     print(f"[document_processor] Đã chia thành {len(parent_chunks)} parent chunks.")
 
-    # 2. Gán ID duy nhất cho mỗi parent chunk để liên kết
     id_key = "parent_id"
     for i, p_chunk in enumerate(parent_chunks):
         p_chunk.metadata[id_key] = str(uuid.uuid4())
-        p_chunk.metadata["chunk_id"] = i  # Thêm chunk_id để giữ khả năng tương thích với code cũ
+        p_chunk.metadata["chunk_id"] = i
 
-    # 3. Chia parent chunks thành các child chunks
     child_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHILD_CHUNK_SIZE, 
         chunk_overlap=CHILD_CHUNK_OVERLAP
@@ -76,48 +84,15 @@ def process_uploaded_files(uploaded_files):
     
     child_chunks = []
     for p_chunk in parent_chunks:
-        # Tách nội dung của parent chunk
         _child_docs_content = child_splitter.split_text(p_chunk.page_content)
         
-        # Gán metadata và tạo Document cho child chunk
         for j, _child_content in enumerate(_child_docs_content):
             child_metadata = p_chunk.metadata.copy()
-            child_metadata["child_chunk_id"] = j  # ID riêng cho child để phân biệt
+            child_metadata["child_chunk_id"] = j
             child_doc = Document(page_content=_child_content, metadata=child_metadata)
             child_chunks.append(child_doc)
 
     print(f"[document_processor] Đã chia thành {len(child_chunks)} child chunks.")
     
-    # Hàm giờ trả về parent và child chunks
     return parent_chunks, child_chunks
 
-# Hàm sắp xếp lại tài liệu cho LLM
-def reorder_documents(docs):
-    """
-    Sắp xếp lại tài liệu để tăng hiệu quả của LLM bằng cách đặt một số tài liệu ưu tiên lên đầu.
-    Thông thường, LLM đọc và nhớ tốt hơn những nội dung ở đầu và cuối context.
-    """
-    print(f"[document_processor] Đang sắp xếp lại {len(docs)} tài liệu tham khảo để tối ưu...")
-    if not docs or len(docs) == 0:
-        return ""
-    
-    reordered_docs = []
-    if len(docs) > 1:
-        # Giữ tài liệu có điểm cao nhất đầu tiên
-        reordered_docs.append(docs[0])
-        
-        # Thêm các tài liệu ở giữa
-        if len(docs) > 2:
-            reordered_docs.extend(docs[2:])
-        
-        # Kết thúc với tài liệu có điểm thứ hai - vị trí dễ nhớ
-        if len(docs) > 1:
-            reordered_docs.append(docs[1]) 
-    else:
-        reordered_docs = docs
-    
-    # Nối các tài liệu với nhau
-    context_text = "\n\n---\n\n".join([doc.page_content for doc in reordered_docs])
-    return context_text
-
-# (Code for process_uploaded_files will go here) 

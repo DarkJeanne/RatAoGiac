@@ -8,6 +8,7 @@ from core.chat_history import save_chat_history, load_chat_history
 import os
 import shutil
 from config import CHAT_HISTORIES_DIR, VECTOR_STORES_DIR
+import uuid
 
 st.set_page_config(page_title="Chatbot Tài Liệu RAG", layout="wide")
 
@@ -34,10 +35,15 @@ def reset_to_upload():
     st.session_state.bot_answering = False
     st.session_state.messages = [] # Đảm bảo messages là list rỗng
 
-def reset_to_chat(): # Hàm này có thể không cần thiết nữa nếu logic được đặt đúng chỗ
-    st.session_state.state = "chatting"
-    st.session_state.processing = False
-    st.session_state.bot_answering = False
+    # Đảm bảo reset retriever
+    st.session_state.retriever = None
+    
+    # Không xóa file_uploader state để giữ lại file đã upload
+    # Streamlit sẽ tự quản lý uploader state
+    
+    print("[app] Đã reset toàn bộ session state về trạng thái upload")
+
+# Hàm reset_to_chat đã được loại bỏ vì không còn cần thiết
 
 # Khởi tạo session_state nếu chưa có
 default_states = {
@@ -59,7 +65,10 @@ for key, value in default_states.items():
 
 # --- Xử lý New Chat hoặc chọn chat cũ ---
 if new_chat:
+    print("[app] Người dùng đã nhấn New Chat, đang reset...")
     reset_to_upload()
+    # Giữ lại file đã upload khi nhấn New Chat
+    # Không tạo giá trị ngẫu nhiên để uploader key không thay đổi
     st.rerun()
 
 if selected_session_id:
@@ -92,7 +101,7 @@ if selected_session_id:
 if st.session_state.state == "upload":
     st.title("💬 Chatbot Hỏi Đáp Tài Liệu (RAG với Llama 3)")
     st.markdown("#### Tải lên tài liệu của bạn để bắt đầu")
-    valid_files, error_files, start_clicked, _ = file_upload_screen(st.session_state.uploaded_files)
+    valid_files, error_files, start_clicked = file_upload_screen(st.session_state.uploaded_files)
     if valid_files:
         st.session_state.uploaded_files = valid_files
     else:
@@ -119,10 +128,12 @@ elif st.session_state.state == "processing":
     st.title(f"⚙️ Đang xử lý: {st.session_state.current_session_display_name}")
     if not st.session_state.uploaded_files:
         st.warning("Không có file nào để xử lý. Vui lòng quay lại và tải lên.")
+        print("[app] Trạng thái processing nhưng không có uploaded_files")
         if st.button("Quay lại trang Upload"):
             reset_to_upload()
             st.rerun()
     else:
+        print(f"[app] Đang xử lý {len(st.session_state.uploaded_files)} file")
         stop_processing_clicked = processing_screen(st.session_state.uploaded_files)
         if stop_processing_clicked:
             st.warning("Đã dừng quá trình xử lý tài liệu.")
@@ -130,11 +141,14 @@ elif st.session_state.state == "processing":
             st.rerun()
         else:
             if not st.session_state.vector_store and not st.session_state.retriever:  # Chỉ xử lý nếu chưa có vector_store hoặc retriever
+                print("[app] Bắt đầu xử lý tài liệu...")
                 parent_chunks, child_chunks = process_uploaded_files(st.session_state.uploaded_files)
                 
                 if parent_chunks and child_chunks:
+                    print(f"[app] Đã tạo {len(parent_chunks)} parent chunks và {len(child_chunks)} child chunks")
                     embedding_model = get_embedding_model()
                     if embedding_model:
+                        print("[app] Đã khởi tạo embedding model, đang tạo vector store...")
                         # Truyền cả parent_chunks và child_chunks để xử lý nâng cao
                         retriever, vs_id_saved = get_or_create_vector_store(
                             st.session_state.session_id, 
@@ -351,12 +365,8 @@ elif st.session_state.state == "chatting":
         except Exception as e:
             response_content = f"Đã xảy ra lỗi khi xử lý yêu cầu: {e}"
         
-        # Tin nhắn "Bot đang suy nghĩ..." đã được hiển thị.
-        # Giờ xóa nó đi TRƯỚC KHI thêm câu trả lời thật.
-        # This is no longer needed as the placeholder is not explicitly managed with st.empty()
-        # if st.session_state.message_placeholder:
-        #     st.session_state.message_placeholder.empty()
-        #     st.session_state.message_placeholder = None 
+        # Tin nhắn "Bot đang suy nghĩ..." đã được hiển thị và sẽ tự động biến mất
+        # khi rerun với bot_answering = False
         
         st.session_state.messages.append({"role": "assistant", "content": response_content, "sources": sources_list})
         save_chat_history(st.session_state.session_id, st.session_state.messages, st.session_state.current_session_display_name)
