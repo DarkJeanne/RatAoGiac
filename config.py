@@ -1,8 +1,9 @@
 import os
 
-# API Keys
-COHERE_API_KEY = "LSsVgNhEJmAWepOBmRNcSwXABh18VtmMXWYGLpD2" # pls don't abuse this
-GOOGLE_API_KEY = "AIzaSyBc7AuBLTYH1aGb0sk2MExIcEuT1vf1Cs0" #pls don't abuse it please
+# API Keys (pls don't abuse them please)
+COHERE_API_KEY = "LSsVgNhEJmAWepOBmRNcSwXABh18VtmMXWYGLpD2" 
+GOOGLE_API_KEY = "AIzaSyBc7AuBLTYH1aGb0sk2MExIcEuT1vf1Cs0" 
+
 # Cấu hình model
 embedding_model_name = "bkai-foundation-models/vietnamese-bi-encoder"
 cohere_reranking_model_name = "rerank-multilingual-v3.0"

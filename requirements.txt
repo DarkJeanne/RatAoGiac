@@ -4,14 +4,13 @@ langchain-community
 langchain-huggingface
 langchain-cohere
 langchain-google-genai
-faiss-gpu
+langchain-core
+faiss-cpu
 PyPDF2
 python-dotenv
 torch
 transformers
 rank_bm25
 sentence-transformers
-langchain-core
 python-docx
-ollama
 google-generativeai

@@ -33,9 +33,6 @@ def get_llm_instance():
         
     try:
         print("[llm_handler] Bắt đầu khởi tạo ChatGoogleGenerativeAI (Gemini)...")
-
-        # Cấu hình an toàn với ĐÚNG ĐỊNH DẠNG ENUM
-        # Đây là phần đã được sửa lại
         safety_settings = {
             HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
             HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
