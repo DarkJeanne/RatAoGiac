@@ -3,7 +3,7 @@ langchain
 langchain-community
 langchain-huggingface
 langchain-cohere
-faiss-cpu
+langchain-google-genai
 faiss-gpu
 PyPDF2
 python-dotenv
@@ -14,3 +14,4 @@ sentence-transformers
 langchain-core
 python-docx
 ollama
+google-generativeai

@@ -4,21 +4,55 @@ from langchain.prompts import PromptTemplate
 from langchain_cohere import CohereRerank
 from langchain.retrievers import ContextualCompressionRetriever
 import streamlit as st
-from config import ollama_model_name, COHERE_API_KEY, cohere_reranking_model_name, device
+from langchain_google_genai import ChatGoogleGenerativeAI
+from config import ollama_model_name, COHERE_API_KEY, cohere_reranking_model_name, device, GOOGLE_API_KEY
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
+# @st.cache_resource(show_spinner="Đang khởi tạo mô hình AI...")
+# def get_llm_instance():
+#     """Khởi tạo LLM instance."""
+#     try:
+#         print("[llm_handler] Bắt đầu khởi tạo ChatOllama...")
+#         return ChatOllama(
+#             model=ollama_model_name,
+#             temperature=0.2,
+#             device=device
+#         )
+#     except Exception as e:
+#         print(f"[llm_handler] Lỗi khi khởi tạo LLM: {e}")
+#         st.error(f"Lỗi khi khởi tạo LLM: {e}")
+#         return None
 
-@st.cache_resource(show_spinner="Đang khởi tạo mô hình AI...")
+@st.cache_resource(show_spinner="Đang khởi tạo mô hình AI (Gemini)...")
 def get_llm_instance():
-    """Khởi tạo LLM instance."""
+    """Khởi tạo LLM instance từ Google (Gemini) với định dạng safety_settings đúng."""
+    from config import GOOGLE_API_KEY
+    
+    if not GOOGLE_API_KEY:
+        st.error("Vui lòng thêm GOOGLE_API_KEY vào file config.py.")
+        return None
+        
     try:
-        print("[llm_handler] Bắt đầu khởi tạo ChatOllama...")
-        return ChatOllama(
-            model=ollama_model_name,
-            temperature=0.2,
-            device=device
+        print("[llm_handler] Bắt đầu khởi tạo ChatGoogleGenerativeAI (Gemini)...")
+
+        # Cấu hình an toàn với ĐÚNG ĐỊNH DẠNG ENUM
+        # Đây là phần đã được sửa lại
+        safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+        }
+
+        return ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash-latest",
+            google_api_key=GOOGLE_API_KEY,
+            temperature=0.1,
+            convert_system_message_to_human=True,
+            safety_settings=safety_settings
         )
     except Exception as e:
-        print(f"[llm_handler] Lỗi khi khởi tạo LLM: {e}")
-        st.error(f"Lỗi khi khởi tạo LLM: {e}")
+        print(f"[llm_handler] Lỗi khi khởi tạo Gemini: {e}")
+        st.error(f"Lỗi khi khởi tạo mô hình Gemini: {e}")
         return None
 
 @st.cache_resource(show_spinner="Đang khởi tạo mô hình Reranker...")
@@ -78,17 +112,17 @@ Bạn là một trợ lý AI chuyên nghiệp, chỉ được phép trả lời 
 **Quy trình làm việc:**
 1. Đọc kỹ câu hỏi và toàn bộ "Thông tin tham khảo" được cung cấp.
 2. Tìm kiếm, xác định và trích xuất các đoạn, câu, dữ kiện hoặc ý liên quan trực tiếp đến câu hỏi trong tài liệu.
-3. Đối chiếu, tổng hợp, phân tích các thông tin liên quan này để tạo thành một câu trả lời ngắn gọn, rõ ràng, đúng trọng tâm, có thể so sánh hoặc làm rõ nếu cần thiết.
+3. Đối chiếu, tổng hợp, so sánh và phân tích các thông tin liên quan này để tạo thành một câu trả lời ngắn gọn, rõ ràng, đúng trọng tâm, có thể so sánh hoặc làm rõ nếu cần thiết.
 4. Nếu có nhiều nguồn hoặc ý trong tài liệu, hãy tổng hợp, so sánh, hoặc làm rõ các điểm khác biệt hoặc bổ sung lẫn nhau.
 5. Nếu không có thông tin phù hợp và không thể đưa ra câu trả lời, trả lời đúng: "Thông tin này không có trong tài liệu được cung cấp." (không thêm thắt gì khác).
-6. Luôn luôn trả lời bằng Tiếng Việt.
-7. Cố gắng đưa ra câu trả lời liên quan mặc dù có thể không đầy đủ.
+6. Nếu chỉ tìm thấy một phần của câu hỏi trong dữ liệu, hãy cố đưa ra câu trả lời và chỉ rõ bạn tìm thấy phần nào, không thấy phần nào.
+7. Luôn luôn trả lời bằng Tiếng Việt.
 
 **Yêu cầu nghiêm ngặt:**
 - Chỉ sử dụng thông tin có trong "Thông tin tham khảo".
-- Không được bịa, không được tự chế, không được tự tạo ví dụ, không được tự đưa ra nhận định ngoài tài liệu, không nói lan man.
+- Không được bịa, không được tự chế, không được tự đưa ra nhận định ngoài tài liệu, không sử dụng kiến thức riêng của bạn.
 - Không được nói lại yêu cầu, không được nói lại câu hỏi, không được nói lại nội dung tài liệu.
-- Trả lời ngắn gọn, đúng trọng tâm, không giải thích lan man, không thêm thắt.
+- Trả lời bằng Tiếng Việt một cách ngắn gọn, đúng trọng tâm, không giải thích lan man, không thêm thắt.
 
 Thông tin tham khảo:
 {context}<|eot_id|><|start_header_id|>user<|end_header_id|>
