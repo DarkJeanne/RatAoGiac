@@ -41,23 +41,17 @@ RAG (Retrieval Augmented Generation) là kỹ thuật kết hợp tìm kiếm th
 
 ### Các bước cài đặt
 
-1. Clone repository:
-```bash
-git clone https://github.com/yourusername/DLFinal-RAG.git
-cd DLFinal-RAG
-```
-
-2. Cài đặt dependencies:
+1. Cài đặt dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Tải mô hình Llama3 bằng Ollama:
+2. Tải mô hình Llama3 bằng Ollama:
 ```bash
 ollama pull llama3:8b-instruct-q4_0
 ```
 
-4. Chạy ứng dụng:
+3. Chạy ứng dụng:
 ```bash
 streamlit run app.py
 ```
